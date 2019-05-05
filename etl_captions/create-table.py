@@ -18,21 +18,13 @@ def create_table():
             {
                 'AttributeName': 'videoId',
                 'KeyType': 'HASH'
-            },
-            {
-                'AttributeName': 'created',
-                'KeyType': 'RANGE'
             }
         ],
         AttributeDefinitions=[
             {
                 'AttributeName': 'videoId',
                 'AttributeType': 'S'
-            },
-            {
-                'AttributeName': 'created',
-                'AttributeType': 'S'
-            },
+            }
         ],
         ProvisionedThroughput={
             'ReadCapacityUnits': 5,
