@@ -9,3 +9,6 @@ top_words/mydata/output
 top_words/mydata/export/
 data/
 notebooks/
+website/node_modules
+website/out
+website/.next
