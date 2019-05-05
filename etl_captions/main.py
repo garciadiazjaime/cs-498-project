@@ -1,5 +1,7 @@
 import os
+from os import environ
 import re
+import sys
 import requests
 import boto3
 from pytube import YouTube
@@ -17,33 +19,44 @@ VIDEO_URL = 'https://www.youtube.com/watch?v=%s'
 LANG = 'es'
 
 
-def get_thumbnail(item):
-    if 'standard' in item['snippet']['thumbnails']:
-        return item['snippet']['thumbnails']['standard']['url']
-    if 'high' in item['snippet']['thumbnails']:
-        return item['snippet']['thumbnails']['high']['url']
-    if 'medium' in item['snippet']['thumbnails']:
-        return item['snippet']['thumbnails']['medium']['url']
-    if 'default' in item['snippet']['thumbnails']:
-        return item['snippet']['thumbnails']['default']['url']
+def get_thumbnail(thumbnails):
+    if 'standard' in thumbnails:
+        return thumbnails['standard']['url']
+    if 'high' in thumbnails:
+        return thumbnails['high']['url']
+    if 'medium' in thumbnails:
+        return thumbnails['medium']['url']
+    if 'default' in thumbnails:
+        return thumbnails['default']['url']
     return ''
 
 
 def youtube_transformer(response):
     videos = []
     for item in response['items']:
-        if 'videoPublishedAt' in item['contentDetails']:
-            videoId = item['snippet']['resourceId']['videoId']
-            title = item['snippet']['title']
-            created = item['contentDetails']['videoPublishedAt']
-            thumbnail = get_thumbnail(item)
+        if 'snippet' in item:
+            snippet = item['snippet']
+            title = snippet['title'] if 'title' in snippet else 'TITLE_NOT_FOUND'
+            if 'thumbnails' in snippet:
+                thumbnail = get_thumbnail(snippet['thumbnails'])
+            else:
+                thumbnail = None
+        if 'contentDetails' in item:
+            contentDetails = item['contentDetails']
+            videoId = contentDetails['videoId'] if 'videoId' in contentDetails else None
+            created = contentDetails['videoPublishedAt'] if 'videoPublishedAt' in contentDetails else None
 
-            videos.append({
-                'videoId': videoId,
-                'title': title,
-                'created': created,
-                'thumbnail': thumbnail
-            })
+        if not created and videoId and snippet:
+            created = snippet['publishedAt']
+
+        print("VideoId:%s,Title:%s" % (videoId, title))
+
+        videos.append({
+            'videoId': videoId,
+            'title': title,
+            'created': created,
+            'thumbnail': thumbnail
+        })
 
     return videos
 
@@ -74,46 +87,54 @@ def striphtml(data):
     return p.sub('', data)
 
 
-def download_captions(video):
+def get_captions(video):
     file_name = 'captions/%s_%s.txt' % (video['videoId'], LANG)
     if os.path.isfile(file_name):
         print("Captions already present in file %s" % file_name)
         return True
 
     video_url = VIDEO_URL % video['videoId']
-    print("downloading captions for: %s" % video_url)
-    source = YouTube(video_url)
-    captions = source.captions.get_by_language_code(LANG)
+    try:
+        source = YouTube(video_url)
+        captions = source.captions.get_by_language_code(LANG)
 
-    if captions and captions.xml_captions:
-        captions_file = open(file_name, 'w')
-        root = ET.fromstring(captions.xml_captions)
-        for child in root:
-            captions_file.write(
-                "%s\t%s\t%s\n" %
-                (child.attrib['start'],
-                 child.attrib['dur'],
-                 striphtml(
-                    child.text)))
-        print("Created caption file %s" % file_name)
-        return True
-    else:
+        if captions and captions.xml_captions:
+            captions_file = open(file_name, 'w')
+            root = ET.fromstring(captions.xml_captions)
+            for child in root:
+                captions_file.write(
+                    "%s\t%s\t%s\n" %
+                    (child.attrib['start'],
+                     child.attrib['dur'],
+                     striphtml(
+                        child.text)))
+            print("Created caption file %s" % file_name)
+            return True
+        else:
+            e = sys.exc_info()[0]
+            print(e)
+            return False
+    except:
         return False
 
-
 def save_videos(videos):
-    dynamodb = boto3.resource(
-        'dynamodb',
-        endpoint_url=os.environ['DYNAMO_ENDPOINT'],
-        region_name=os.environ['AWS_REGION_NAME'],
-        aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
-        aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'])
+    if 'DYNAMO_ENDPOINT' in environ:
+        dynamodb = boto3.resource(
+            'dynamodb',
+            endpoint_url=environ['DYNAMO_ENDPOINT'],
+            region_name=environ['AWS_REGION_NAME'])
+    else:
+        dynamodb = boto3.resource(
+            'dynamodb',
+            region_name=environ['AWS_REGION_NAME'],
+            aws_access_key_id=environ['AWS_ACCESS_KEY_ID'],
+            aws_secret_access_key=environ['AWS_SECRET_ACCESS_KEY'])
 
     table = dynamodb.Table('videos')
     new_videos_count = 0
 
     for video in videos:
-        if download_captions(video):
+        if get_captions(video):
             response = table.query(
                 KeyConditionExpression=Key('videoId').eq(video['videoId'])
             )

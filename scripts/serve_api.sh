@@ -1,10 +1,11 @@
-# create dynamodb tables
+# download video captions
 if [ "$#" -eq 0 ]; then
 	docker-compose run \
 		--rm \
 		-e DYNAMO_ENDPOINT=http://dynamo:8000 \
-		etl \
-		python ./etl_captions/create-table.py
+		-p 5000:5000 \
+		api \
+		python ./app.py
 elif [ "$#" -eq 2 ]; then
 	docker run \
 		--rm \
@@ -12,11 +13,11 @@ elif [ "$#" -eq 2 ]; then
 		-e AWS_ACCESS_KEY_ID=$1 \
 		-e AWS_SECRET_ACCESS_KEY=$2 \
 		-it \
-		-v ${PWD}:/app \
+		-v ${PWD}/api:/app \
 		-w /app \
-		cs498_etl:latest \
-		python ./etl_captions/create-table.py
+		-p 5000:5000 \
+		cs498_api:latest \
+		python ./app.py
 else
-	echo "Usage: ./create_tables.sh [[AWSAccessKeyId] [AWSSecretKey]]"
+	echo "Usage: ./serve_api.sh [[AWSAccessKeyId] [AWSSecretKey]]"
 fi
-

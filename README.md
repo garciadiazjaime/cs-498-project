@@ -8,6 +8,15 @@
 
 - [ ] make sure that the topics are meaningful
 
+- ETL script
+	- two files
+		- txn file CSV file
+			"videoId", "list of words"
+
+- Create a small front-end (REST API endpoint)
+	- Given one or more keywords
+	- Returns (JSON) a list of matching videos
+
 - [ ] Finalize the project report
 
 
@@ -21,11 +30,35 @@ We use Docker and Docker-Compose to ensure that the environment is reproducible.
 $./scripts/build_docker_image.sh
 ```
 
+This creates 3 docker images
+
+- cs498_etl:latest
+
+  This image is used to perform ETL operations such as downloading YouTube video details and captions.
+
+- cs498_ds:latest
+
+  This image is used to perform data science activities such as training predictive model and inference.
+
+- cs498_api:latest
+
+  This image is used to provide REST API so that usres can query videos based on the labels.
+
 ## 2. Create tables in local dynamodb instance
 
 ```bash
 $./scripts/create_tables.sh
 ```
+
+This script create two tables in DynamoDB
+
+- Table 'videos'
+
+  This table is used during ETL operations to store list of YouTube videos to be processed.
+
+- Table 'video_tags'
+
+  This table is used during ETL, after model inference, to store the label and video relation information.
 
 ## 3. Download captions
 
@@ -85,7 +118,7 @@ Use the URL to access the notebook and open test1.ipynb from notebooks folder.
 
 ##### Topic modeling
 
-In order to build two separate (LDA, LSI) models
+In order to build TFIDF based LSI model
 
 ```bash
 $./scripts/build_topic_model.sh
@@ -97,6 +130,8 @@ This will use the output from *Topics modeling* (video_id:topics) and update vid
 Ideally each video will have its own topics
 
 ```bash
+$./build_topic_model.sh [NUM_TOPICS] [NUM_WORDS_IN_TOPIC]
+
 $./scripts/set_topics.sh
 ```
 
